@@ -138,6 +138,10 @@ function islandora_object_field_field_formatter_info() {
       'label' => t('Object label'),
       'field types' => array('islandora_object_field'),
     ),
+    'islandora_object_field_thumbnail_formatter' => array(
+      'label' => t('Object thumbnail'),
+      'field types' => array('islandora_object_field'),
+    ),
   );
 }
 
@@ -150,11 +154,12 @@ function islandora_object_field_field_formatter_view($entity_type, $entity, $fie
 
   switch ($display['type']) {
     case 'islandora_object_field_label_formatter':
+    case 'islandora_object_field_thumbnail_formatter':
       foreach ($items as $delta => $item) {
         try {
           $object = $repository->getObject($item['pid']);
           $element[$delta] = array(
-            '#theme' => 'islandora_object_field_label',
+            '#theme' => str_replace('_formatter', '', $display['type']),
             '#object' => $object,
             '#pid' => $item['pid'],
             '#label' => $object->label,
@@ -177,6 +182,10 @@ function islandora_object_field_theme($existing, $type, $theme, $path) {
   return array(
     'islandora_object_field_label' => array(
       'template' => 'templates/islandora-object-field-label',
+      'variables' => array('label' => NULL, 'pid' => NULL, 'object' => NULL),
+    ),
+    'islandora_object_field_thumbnail' => array(
+      'template' => 'templates/islandora-object-field-thumbnail',
       'variables' => array('label' => NULL, 'pid' => NULL, 'object' => NULL),
     ),
   );
