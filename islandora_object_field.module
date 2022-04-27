@@ -279,6 +279,39 @@ function islandora_object_field_autocomplete($field, $search) {
   $cmodels = array_filter($field['settings']['content_models']);
   $repository = islandora_get_tuque_connection()->repository;
 
+  if (module_exists('islandora_solr')) {
+    module_load_include('inc', 'islandora_solr', 'includes/utilities');
+    $qp = new IslandoraSolrQueryProcessor();
+    $qp->buildQuery($search);
+    $fq = '';
+    foreach ($cmodels as $cmodel) {
+      $fq .= ($fq ? ' OR ' : '').'"info:fedora/'.$cmodel.'"';
+    }
+    if ($fq && count($cmodel) > 1) {
+      $fq = '('.$fq.')';
+    }
+    if ($fq) {
+      $qp->solrParams['fq'][] = islandora_solr_lesser_escape(variable_get('islandora_solr_content_model_field', 'RELS_EXT_hasModel_uri_ms')).':'.$fq;
+    }
+    $label_field = variable_get('islandora_solr_object_label_field', 'fgs_label_s');
+    $qp->solrParams['fl'] = implode(',', array(
+      'PID',
+      $label_field,
+    ));
+    $qp->solrParams['defType'] = 'dismax';
+    $qp->executeQuery();
+    $return = array();
+    foreach ($qp->islandoraSolrResult['response']['objects'] as $result) {
+      $return[$result['PID']] = t('@label (@pid)', array(
+        //TODO: why is $result['solr_doc'] empty?  We should be able to pull $result['solr_doc'][$label_field].
+        '@label' => $result['object_label'],
+        '@pid' =>  $result['PID'],
+      ));
+    }
+    drupal_json_output($return);
+    return;
+  }
+
   // Build UNION statement.
   $where_strings = array();
   foreach ($cmodels as $cmodel) {
