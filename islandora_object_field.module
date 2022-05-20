@@ -287,7 +287,7 @@ function islandora_object_field_autocomplete($field, $search) {
     foreach ($cmodels as $cmodel) {
       $fq .= ($fq ? ' OR ' : '').'"info:fedora/'.$cmodel.'"';
     }
-    if ($fq && count($cmodel) > 1) {
+    if ($fq && count($cmodels) > 1) {
       $fq = '('.$fq.')';
     }
     if ($fq) {
