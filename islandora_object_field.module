@@ -133,12 +133,19 @@ function islandora_object_field_field_is_empty($item, $field) {
  * Implements hook_field_formatter_info().
  */
 function islandora_object_field_field_formatter_info() {
-  return array(
+  $formatters = array(
     'islandora_object_field_label_formatter' => array(
       'label' => t('Object label'),
       'field types' => array('islandora_object_field'),
     ),
   );
+  if (module_exists('islandora_solr')) {
+    $formatters['islandora_object_field_solr_formatter'] = array(
+      'label' => t('Solr search'),
+      'field types' => array('islandora_object_field'),
+    );
+  }
+  return $formatters;
 }
 
 /**
@@ -150,6 +157,7 @@ function islandora_object_field_field_formatter_view($entity_type, $entity, $fie
 
   switch ($display['type']) {
     case 'islandora_object_field_label_formatter':
+    case 'islandora_object_field_solr_formatter':
       foreach ($items as $delta => $item) {
         try {
           $object = $repository->getObject($item['pid']);
@@ -159,6 +167,17 @@ function islandora_object_field_field_formatter_view($entity_type, $entity, $fie
             '#pid' => $item['pid'],
             '#label' => $object->label,
           );
+          // Solr formatter adds a rendered Solr search result
+          if ($display['type'] == 'islandora_object_field_solr_formatter' && module_exists('islandora_solr')) {
+            drupal_load('module', 'islandora_solr');
+            $query = format_string('!field:!value', array('!field' => 'PID', '!value' => islandora_solr_lesser_escape($item['pid'])));
+            $qp = new IslandoraSolrQueryProcessor();
+            $qp->buildQuery($query);
+            $qp->executeQuery();
+            $results = new IslandoraSolrResults();
+            $solr = $results->printResults($qp->islandoraSolrResult);
+            $element[$delta]['#solr'] = $solr;
+          }
         }
         catch (Exception $e) {
           // This is likely a permissions issue, continue on.
@@ -178,6 +197,10 @@ function islandora_object_field_theme($existing, $type, $theme, $path) {
     'islandora_object_field_label' => array(
       'template' => 'templates/islandora-object-field-label',
       'variables' => array('label' => NULL, 'pid' => NULL, 'object' => NULL),
+    ),
+    'islandora_object_field_solr' => array(
+      'template' => 'templates/islandora-object-field-solr',
+      'variables' => array('label' => NULL, 'pid' => NULL, 'object' => NULL, 'solr' => NULL),
     ),
   );
 }
