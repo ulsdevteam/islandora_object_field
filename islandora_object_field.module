@@ -144,6 +144,10 @@ function islandora_object_field_field_formatter_info() {
       'label' => t('Solr search'),
       'field types' => array('islandora_object_field'),
     );
+    $formatters['islandora_object_field_solrmetadata_formatter'] = array(
+      'label' => t('Solr metadata (default association)'),
+      'field types' => array('islandora_object_field'),
+    );
   }
   return $formatters;
 }
@@ -158,6 +162,7 @@ function islandora_object_field_field_formatter_view($entity_type, $entity, $fie
   switch ($display['type']) {
     case 'islandora_object_field_label_formatter':
     case 'islandora_object_field_solr_formatter':
+    case 'islandora_object_field_solrmetadata_formatter':
       foreach ($items as $delta => $item) {
         try {
           $object = $repository->getObject($item['pid']);
@@ -176,6 +181,13 @@ function islandora_object_field_field_formatter_view($entity_type, $entity, $fie
             $qp->executeQuery();
             $results = new IslandoraSolrResults();
             $solr = $results->printResults($qp->islandoraSolrResult);
+            $element[$delta]['#solr'] = $solr;
+          }
+          // Solr metadata formatter adds a rendered Solr metadata display
+          if ($display['type'] == 'islandora_object_field_solrmetadata_formatter' && module_exists('islandora_solr')) {
+            $settings = $display['settings'];
+            drupal_load('module', 'islandora_solr_metadata');
+            $solr = islandora_solr_metadata_display_callback($object, TRUE);
             $element[$delta]['#solr'] = $solr;
           }
         }
@@ -200,6 +212,10 @@ function islandora_object_field_theme($existing, $type, $theme, $path) {
     ),
     'islandora_object_field_solr' => array(
       'template' => 'templates/islandora-object-field-solr',
+      'variables' => array('label' => NULL, 'pid' => NULL, 'object' => NULL, 'solr' => NULL),
+    ),
+    'islandora_object_field_solrmetadata' => array(
+      'template' => 'templates/islandora-object-field-solrmetadata',
       'variables' => array('label' => NULL, 'pid' => NULL, 'object' => NULL, 'solr' => NULL),
     ),
   );
