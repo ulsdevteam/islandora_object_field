@@ -144,6 +144,13 @@ function islandora_object_field_field_formatter_info() {
       'label' => t('Solr search'),
       'field types' => array('islandora_object_field'),
     );
+    $formatters['islandora_object_field_solrmetadata_byo_formatter'] = array(
+      'label' => t('Solr metadata (named association)'),
+      'field types' => array('islandora_object_field'),
+      'settings' => array(
+        'metadata_configuration' => FALSE,
+      ),
+    );
     $formatters['islandora_object_field_solrmetadata_formatter'] = array(
       'label' => t('Solr metadata (default association)'),
       'field types' => array('islandora_object_field'),
@@ -163,6 +170,7 @@ function islandora_object_field_field_formatter_view($entity_type, $entity, $fie
     case 'islandora_object_field_label_formatter':
     case 'islandora_object_field_solr_formatter':
     case 'islandora_object_field_solrmetadata_formatter':
+    case 'islandora_object_field_solrmetadata_byo_formatter':
       foreach ($items as $delta => $item) {
         try {
           $object = $repository->getObject($item['pid']);
@@ -190,6 +198,13 @@ function islandora_object_field_field_formatter_view($entity_type, $entity, $fie
             $solr = islandora_solr_metadata_display_callback($object, TRUE);
             $element[$delta]['#solr'] = $solr;
           }
+          // Solr metadata BYO formatter adds a rendered Solr metadata display, but independent of cmodel associations
+          if ($display['type'] == 'islandora_object_field_solrmetadata_byo_formatter' && module_exists('islandora_solr')) {
+            $settings = $display['settings'];
+            drupal_load('module', 'islandora_solr_metadata');
+            $solr = islandora_object_field_solr_metadata_display_override($object, $settings['metadata_configuration']);
+            $element[$delta]['#solr'] = $solr;
+          }
         }
         catch (Exception $e) {
           // This is likely a permissions issue, continue on.
@@ -198,6 +213,91 @@ function islandora_object_field_field_formatter_view($entity_type, $entity, $fie
       break;
   }
 
+  return $element;
+}
+
+/**
+ * Metadata display callback for rendering metadata from Solr.
+ * @see islandora_solr_metadata_description_callback
+ *
+ * @param AbstractObject $object
+ *   An AbstractObject representing an object within Fedora.
+ * @param string $metadata_configuration_name
+ *   The machine name of the selected metadata configuration
+ *
+ * @return string
+ *   Markup representing the metadata display pulled from Solr.
+ */
+function islandora_object_field_solr_metadata_display_override(AbstractObject $object, $metadata_configuration_name) {
+  module_load_include('inc', 'islandora_solr_metadata', 'includes/db');
+  $metadata_configuration_id = null;
+  $associations = islandora_solr_metadata_get_associations();
+  foreach ($associations as $a) {
+    if ($a['machine_name'] === $metadata_configuration_name) {
+      $metadata_configuration_id = $a['id'];
+    }
+  }
+  $elements = array(
+    'islandora_object' => $object,
+    'print' => TRUE,
+    'associations' => array($metadata_configuration_id => array('configuration_id' => $metadata_configuration_id, 'cmodel' => '*')),
+  );
+  drupal_alter('islandora_solr_metadata_display_elements', $elements);
+  if (count($elements['associations']) > 0) {
+    return theme('islandora_solr_metadata_display', $elements);
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ * Implements hook_field_formatter_settings_summary().
+ */
+function islandora_object_field_field_formatter_settings_summary($field, $instance, $view_mode) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+
+  $summary = array();
+  if ($display['type'] == 'islandora_object_field_solrmetadata_byo_formatter') {
+    module_load_include('inc', 'islandora_solr_metadata', 'includes/db');
+    $value = t('Broken/Missing handler');
+    if ($settings['metadata_configuration']) {
+      $associations = islandora_solr_metadata_get_associations();
+      foreach ($associations as $a) {
+        if ($a['machine_name'] === $settings['metadata_configuration']) {
+          $value = $a['name'];
+        }
+      }
+    }
+    $summary[] = $settings['metadata_configuration'] ? t('Solr Metadata Configuration: !c', array('!c' => $value)) : t('No Solr Metadata Configuration selected');
+  }
+
+  return implode('<br />', $summary);
+}
+
+/**
+ * Implements hook_field_formatter_settings_form().
+ */
+function islandora_object_field_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+
+  if ($display['type'] == 'islandora_object_field_solrmetadata_byo_formatter') {
+    module_load_include('inc', 'islandora_solr_metadata', 'includes/db');
+    $associations = islandora_solr_metadata_get_associations();
+    $options = array('' => '');
+    foreach ($associations as $a) {
+      $options[$a['machine_name']] = $a['name'];
+    }
+    $element['metadata_configuration'] = array(
+      '#title' => t('Solr metadata configuration'),
+      '#description' => t('Select the desired Solr metadata configuration to use with this field.  Note that the Content Model association is ignored'),
+      '#type' => 'select',
+      '#options' => $options,
+      '#default_value' => $settings['metadata_configuration'],
+    );
+  }
   return $element;
 }
 
@@ -212,6 +312,10 @@ function islandora_object_field_theme($existing, $type, $theme, $path) {
     ),
     'islandora_object_field_solr' => array(
       'template' => 'templates/islandora-object-field-solr',
+      'variables' => array('label' => NULL, 'pid' => NULL, 'object' => NULL, 'solr' => NULL),
+    ),
+    'islandora_object_field_solrmetadata_byo' => array(
+      'template' => 'templates/islandora-object-field-solrmetadata',
       'variables' => array('label' => NULL, 'pid' => NULL, 'object' => NULL, 'solr' => NULL),
     ),
     'islandora_object_field_solrmetadata' => array(
